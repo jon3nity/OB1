@@ -38,7 +38,7 @@ A personal AI memory system made of two parts:
 
 ## Credential Tracker
 
-Download the credential tracker: https://github.com/NateBJones-Projects/OB1/blob/main/docs/open-brain-credential-tracker.xlsx, from the Open Brain GitHub repo before doing anything else. Every API key, password, URL, and command you generate goes into this spreadsheet. Some credentials cannot be retrieved once you leave the page — if you don't save them immediately you'll have to start over.
+Every API key, password, URL, and command you generate goes into this spreadsheet. Some credentials cannot be retrieved once you leave the page; if you don't save them immediately, you'll have to start over.
 
 The tracker has AUTO rows that populate themselves once you enter your Project Ref. Fill in every ENTER row as you go.
 
@@ -120,6 +120,7 @@ create trigger thoughts_updated_at
 When Supabase warns about RLS — click **Run without RLS**. This is safe because your MCP server handles access control via the `MCP_ACCESS_KEY`.
 
 ### 2.3 — Create the Semantic Search Function
+> ⚠️ **This function is missing from the original base guide.** Required for `search_thoughts` to work.
 
 New query → paste and Run:
 
@@ -157,7 +158,7 @@ $$;
 ```
 
 ### 2.4 — Create the Upsert Function
-
+> ⚠️ **This function is missing from the base guide.** Required for `capture_thought` to work.
 New query → paste and Run:
 
 ```sql
@@ -223,9 +224,9 @@ In Supabase left sidebar → **Settings (gear icon) → API**. Copy into your cr
 2. Go to [openrouter.ai/keys](https://openrouter.ai/keys)
 3. Click **Create Key**, name it `open-brain`
 4. Copy the key into your credential tracker immediately (row 4)
-5. Add at least **$10 in credits** at [openrouter.ai/credits](https://openrouter.ai/credits)
+5. Free, but when exhausted at least **$10 in credits** at [openrouter.ai/credits](https://openrouter.ai/credits)
 
-> **Why $10 and not $5?** The guide says $5, but the actual threshold for unlocking 1,000 requests/day (vs 50/day on the free tier) is $10. At fractions of a cent per memory capture, $10 lasts many months of daily personal use.
+> **Why $10 and not $5?** The actual threshold for 1,000 requests/day (vs 50/day free) is $10, not $5. At fractions of a cent per capture, $10 lasts months. If your usage is light (under 50 captures/day), the free tier works — add credits only when you hit a 429 error.
 
 OpenRouter is what generates the vector embeddings — converting your memories into mathematical representations that enable semantic search.
 
@@ -363,6 +364,79 @@ supabase functions list
 
 You should see `open-brain-mcp` with status **ACTIVE**.
 
+### Mac / Linux (Terminal)
+ 
+#### 6.1 — Create Project Folder
+ 
+```bash
+mkdir ~/Projects/open-brain
+cd ~/Projects/open-brain
+pwd
+```
+ 
+Output must show your folder path.
+ 
+#### 6.2 — Install Supabase CLI via Homebrew
+ 
+```bash
+brew install supabase/tap/supabase
+supabase --version
+```
+ 
+#### 6.3 — Log In
+ 
+```bash
+supabase login
+```
+ 
+#### 6.4 — Initialize and Link
+ 
+```bash
+supabase init
+ls supabase/
+supabase link --project-ref YOUR_PROJECT_REF
+```
+ 
+Enter your Database password when prompted.
+ 
+#### 6.5 — Set Secrets
+ 
+```bash
+supabase secrets set MCP_ACCESS_KEY=your-access-key-from-step-5
+supabase secrets set OPENROUTER_API_KEY=your-openrouter-key-from-step-4
+```
+ 
+#### 6.6 — Download Server Files
+ 
+```bash
+supabase functions new open-brain-mcp
+ 
+curl -o supabase/functions/open-brain-mcp/index.ts \
+  https://raw.githubusercontent.com/NateBJones-Projects/OB1/main/server/index.ts
+ 
+curl -o supabase/functions/open-brain-mcp/deno.json \
+  https://raw.githubusercontent.com/NateBJones-Projects/OB1/main/server/deno.json
+```
+ 
+Verify:
+```bash
+head -1 supabase/functions/open-brain-mcp/index.ts
+```
+ 
+✅ Correct: `import "jsr:@supabase/functions-js/edge-runtime.d.ts";`
+ 
+#### 6.7 — Deploy
+ 
+```bash
+supabase functions deploy open-brain-mcp --no-verify-jwt
+supabase functions list
+```
+ 
+Confirm `open-brain-mcp` shows **ACTIVE**.
+ 
+---
+### After Deployment (All Platforms)
+
 Your MCP server is now live at:
 ```
 https://YOUR_PROJECT_REF.supabase.co/functions/v1/open-brain-mcp
@@ -375,6 +449,9 @@ https://YOUR_PROJECT_REF.supabase.co/functions/v1/open-brain-mcp?key=YOUR_ACCESS
 
 Both of these are auto-generated in your credential tracker if you filled in rows 1.8 and 5.
 
+> 🔒 **Security note:** The server files are downloaded from the official Open Brain GitHub repo by Nate B. Jones (the project creator). Verify the contents by opening the URLs in your browser, or fork the repo to your own GitHub account and download from your fork instead for maximum control.
+
+The MCP server runs in Supabase's cloud 24/7. Your PC does not need to be on. The Supabase CLI is only needed again if you redeploy or update secrets.
 ---
 
 ## Step 7 — Connect to Your AI Clients
@@ -385,14 +462,21 @@ Both of these are auto-generated in your credential tracker if you filled in row
 2. Click **Connectors** in the left sidebar
 3. Click **Add custom connector**
 4. Name: `Open Brain`
-5. URL: paste your MCP Connection URL (ending in `?key=YOUR_ACCESS_KEY`)
+5. URL: paste your MCP Connection URL ending in `?key=YOUR_ACCESS_KEY` (URL: `https://YOUR_PROJECT_REF.supabase.co/functions/v1/open-brain-mcp?key=YOUR_ACCESS_KEY`)
 6. Click **Add**
 
 Open Brain now appears in the Connectors list. Enable it per conversation via the **+** button at the bottom of any chat.
 
 ### 7.2 — Claude Code
 
-Run this command from any terminal (your project folder or anywhere):
+**Windows:**
+```powershell
+claude mcp add --transport http open-brain `
+  https://YOUR_PROJECT_REF.supabase.co/functions/v1/open-brain-mcp `
+  --header "x-brain-key: YOUR_ACCESS_KEY"
+```
+ 
+**Mac / Linux:**
 ```bash
 claude mcp add --transport http open-brain \
   https://YOUR_PROJECT_REF.supabase.co/functions/v1/open-brain-mcp \
@@ -409,7 +493,8 @@ Same as 7.1 — go to Settings → Connectors → Add custom connector with your
 
 VS Code uses a dedicated `mcp.json` file at:
 ```
-C:\Users\YourName\AppData\Roaming\Code\User\mcp.json
+- **Windows:** `C:\Users\YourName\AppData\Roaming\Code\User\mcp.json`
+- **Mac:** `~/Library/Application Support/Code/User/mcp.json`
 ```
 
 Open it (or create it) and add:
@@ -454,6 +539,10 @@ Add to your `mcp_settings.json`:
 
 > Note: No space after the colon in `x-brain-key:YOUR_ACCESS_KEY`. Some clients mangle spaces inside args.
 
+### 7.6 — ChatGPT, Gemini, and Other AI Platforms
+ 
+Because Open Brain is a standard MCP server at a public URL, any AI client with MCP support can connect using your MCP Connection URL. This means context captured in Claude can be queried from ChatGPT and vice versa — your memory is platform-agnostic.
+
 ---
 
 ## Step 8 — Enable Open Brain in a Conversation
@@ -493,7 +582,7 @@ What did I capture about my setup today?
 
 Claude should call `search_thoughts` and return the thought you just saved.
 
-If all three work — your brain is fully operational.
+If all three work, your brain is fully operational.
 
 ---
 
